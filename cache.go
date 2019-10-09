@@ -22,22 +22,27 @@ const (
 
 // Option 缓存参数
 type Option struct {
-	Type _type
+	Type   _type
+	Redis  RedisOption
+	Memory MemoryOption
+}
 
-	Redis struct {
-		// 服务器地址
-		Host string
-		// 服务器端口
-		Port int
-		// 密码
-		Password string
-		// 数据库索引
-		DB int
-	}
-	Memory struct {
-		// memcache 使用大小
-		Size int
-	}
+// RedisOption redis 参数
+type RedisOption struct {
+	// 服务器地址
+	Host string
+	// 服务器端口
+	Port int
+	// 密码
+	Password string
+	// 数据库索引
+	DB int
+}
+
+// MemoryOption memory 参数
+type MemoryOption struct {
+	// memcache 使用大小
+	Size int
 }
 
 // Cache 缓存
@@ -48,13 +53,12 @@ type Cache interface {
 	Del(key string) error
 }
 
-// RedisCache .
-type RedisCache struct {
+type redisCache struct {
 	redisClient *redis.Client
 }
 
 // Set .
-func (c *RedisCache) Set(key string, data interface{}, exp time.Duration) error {
+func (c *redisCache) Set(key string, data interface{}, exp time.Duration) error {
 	if _, err := c.redisClient.Ping().Result(); err != nil {
 		return err
 	}
@@ -69,7 +73,7 @@ func (c *RedisCache) Set(key string, data interface{}, exp time.Duration) error 
 }
 
 // Get .
-func (c *RedisCache) Get(key string) ([]byte, error) {
+func (c *redisCache) Get(key string) ([]byte, error) {
 	if _, err := c.redisClient.Ping().Result(); err != nil {
 		return nil, err
 	}
@@ -77,7 +81,7 @@ func (c *RedisCache) Get(key string) ([]byte, error) {
 }
 
 // GetString .
-func (c *RedisCache) GetString(key string) (string, error) {
+func (c *redisCache) GetString(key string) (string, error) {
 	val, err := c.Get(key)
 	if err != nil {
 		return "", err
@@ -91,7 +95,7 @@ func (c *RedisCache) GetString(key string) (string, error) {
 }
 
 // Del .
-func (c *RedisCache) Del(key string) error {
+func (c *redisCache) Del(key string) error {
 	if _, err := c.redisClient.Ping().Result(); err != nil {
 		return err
 	}
@@ -99,13 +103,12 @@ func (c *RedisCache) Del(key string) error {
 	return nil
 }
 
-// MemoryCache .
-type MemoryCache struct {
+type memoryCache struct {
 	memoryClient *freecache.Cache
 }
 
 // Set .
-func (c *MemoryCache) Set(key string, data interface{}, exp time.Duration) error {
+func (c *memoryCache) Set(key string, data interface{}, exp time.Duration) error {
 	bs, err := json.Marshal(data)
 	if err != nil {
 		return err
@@ -117,7 +120,7 @@ func (c *MemoryCache) Set(key string, data interface{}, exp time.Duration) error
 }
 
 // Get .
-func (c *MemoryCache) Get(key string) ([]byte, error) {
+func (c *memoryCache) Get(key string) ([]byte, error) {
 	val, err := c.memoryClient.Get([]byte(key))
 	if err != nil {
 		return nil, err
@@ -126,7 +129,7 @@ func (c *MemoryCache) Get(key string) ([]byte, error) {
 }
 
 // GetString .
-func (c *MemoryCache) GetString(key string) (string, error) {
+func (c *memoryCache) GetString(key string) (string, error) {
 	val, err := c.Get(key)
 	if err != nil {
 		return "", err
@@ -140,7 +143,7 @@ func (c *MemoryCache) GetString(key string) (string, error) {
 }
 
 // Del .
-func (c *MemoryCache) Del(key string) error {
+func (c *memoryCache) Del(key string) error {
 	c.memoryClient.Del([]byte(key))
 	return nil
 }
@@ -151,11 +154,11 @@ func Cacher(option *Option) Cache {
 		panic("option is nil")
 	}
 	if option.Type == Redis {
-		return &RedisCache{redis.NewClient(&redis.Options{
+		return &redisCache{redis.NewClient(&redis.Options{
 			Addr:     fmt.Sprintf("%v:%v", option.Redis.Host, option.Redis.Port),
 			Password: option.Redis.Password,
 			DB:       option.Redis.DB,
 		})}
 	}
-	return &MemoryCache{freecache.NewCache(option.Memory.Size)}
+	return &memoryCache{freecache.NewCache(option.Memory.Size)}
 }
